@@ -9,9 +9,18 @@
 <body>
     <div id="login-container" class="login-container">
         <form id="login-form" class="login-form">
-            <h2>Login de Administrador</h2>
+            <h2>Login do Sistema</h2>
             <div class="form-group">
-                <label for="login-usuario">Usuário:</label>
+                <label for="login-tipo">Tipo de Usuário:</label>
+                <select id="login-tipo" required>
+                    <option value="">Selecione o tipo</option>
+                    <option value="admin">Administrador</option>
+                    <option value="professor">Professor</option>
+                    <option value="aluno">Aluno</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="login-usuario">Usuário/CPF:</label>
                 <input type="text" id="login-usuario" required maxlength="32" autofocus>
             </div>
             <div class="form-group">
@@ -29,41 +38,11 @@
     <div class="container">
         <header class="header">
             <h1>Sistema de Gestão Acadêmica</h1>
-            <nav class="nav">
-                <button class="nav-btn" data-module="dashboard">Dashboard</button>
-                <button class="nav-btn" data-module="alunos">Alunos</button>
-                <button class="nav-btn" data-module="professores">Professores</button>
-                <button class="nav-btn" data-module="turmas">Turmas</button>
-                <button class="nav-btn" data-module="notas">Notas</button>
-                <button class="nav-btn" data-module="frequencia">Frequência</button>
-                <button class="nav-btn" data-module="relatorios">Relatórios</button>
-                <button class="nav-btn" data-module="disciplinas">Disciplinas</button>
-            </nav>
+            <nav class="nav" id="main-nav">
+                </nav>
         </header>
 
         <main class="main-content">
-            <div id="dashboard" class="module active">
-                <h2>Dashboard</h2>
-                <div class="dashboard-stats">
-                    <div class="stat-card">
-                        <h3>Total de Alunos</h3>
-                        <span id="total-alunos">0</span>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Total de Professores</h3>
-                        <span id="total-professores">0</span>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Total de Turmas</h3>
-                        <span id="total-turmas">0</span>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Total de Disciplinas</h3>
-                        <span id="total-disciplinas">0</span>
-                    </div>
-                </div>
-            </div>
-
             <div id="alunos" class="module">
                 <h2>Cadastro de Alunos</h2>
                 <form id="form-aluno" class="form">
@@ -186,9 +165,9 @@
                 <h2>Lançamento de Notas</h2>
                 <form id="form-nota" class="form">
                     <div class="form-group">
-                        <label for="aluno-nota">Aluno:</label>
-                        <select id="aluno-nota" required>
-                            <option value="">Selecione um aluno</option>
+                        <label for="turma-nota">Turma:</label>
+                        <select id="turma-nota" required>
+                            <option value="">Selecione uma turma</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -197,45 +176,17 @@
                             <option value="">Selecione uma disciplina</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="tipo-avaliacao">Tipo de Avaliação:</label>
-                        <select id="tipo-avaliacao" required>
-                            <option value="">Selecione o tipo</option>
-                            <option value="prova1">Prova 1</option>
-                            <option value="prova2">Prova 2</option>
-                            <option value="trabalho">Trabalho</option>
-                            <option value="atividade">Atividade</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="nota-valor">Nota:</label>
-                        <input type="number" id="nota-valor" min="0" max="10" step="0.1" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Lançar Nota</button>
+                    <button type="button" id="btn-carregar-alunos" class="btn btn-secondary">Carregar Alunos da Turma</button>
                 </form>
-                <div class="list-container">
-                    <h3>Consulta de Notas</h3>
-                    <div class="form-group">
-                        <label for="filtro-aluno">Filtrar por Aluno:</label>
-                        <select id="filtro-aluno">
-                            <option value="">Todos os alunos</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filtro-disciplina-nota">Filtrar por Disciplina:</label>
-                        <select id="filtro-disciplina-nota">
-                            <option value="">Todas as disciplinas</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filtro-turma-nota">Filtrar por Turma:</label>
-                        <select id="filtro-turma-nota">
-                            <option value="">Todas as turmas</option>
-                        </select>
-                    </div>
-                    <div id="lista-notas" class="list"></div>
+                <div class="list-container" id="container-lancamento-notas" style="display: none;">
+                    <h3>Alunos da Turma</h3>
+                    <form id="form-notas-turma">
+                        <div id="lista-alunos-notas" class="list"></div>
+                        <button type="submit" class="btn btn-primary" style="margin-top: 20px;">Salvar Todas as Notas</button>
+                    </form>
                 </div>
-            </div>
+                
+                </div>
 
             <div id="frequencia" class="module">
                 <h2>Controle de Frequência</h2>
@@ -296,17 +247,6 @@
                     <button id="gerar-relatorio" class="btn btn-primary">Gerar Relatório</button>
                 </div>
                 <div id="relatorio-resultado" class="relatorio-container"></div>
-                
-                <div class="backup-section">
-                    <h3>Backup e Restore</h3>
-                    <div class="backup-actions">
-                        <button id="download-backup" class="btn btn-secondary">Download Backup</button>
-                        <input type="file" id="upload-backup" accept=".json" style="display: none;">
-                        <button id="upload-backup-btn" class="btn btn-secondary">Upload Backup</button>
-                        <button id="limpar-dados" class="btn btn-danger">Limpar Todos os Dados</button>
-                    </div>
-                    <div id="backup-status" class="backup-status"></div>
-                </div>
             </div>
 
             <div id="disciplinas" class="module">
@@ -320,15 +260,18 @@
                         <label for="codigo-disciplina">Código:</label>
                         <input type="text" id="codigo-disciplina" required>
                     </div>
-                    <div class="form-group">
-                        <label for="carga-disciplina">Carga Horária:</label>
-                        <input type="number" id="carga-disciplina" min="1" required>
-                    </div>
                     <button type="submit" class="btn btn-primary">Cadastrar Disciplina</button>
                 </form>
                 <div class="list-container">
                     <h3>Disciplinas Cadastradas</h3>
                     <div id="lista-disciplinas" class="list"></div>
+                </div>
+            </div>
+
+            <div id="consulta-notas-aluno" class="module">
+                <h2>Minhas Notas</h2>
+                <div class="list-container">
+                    <div id="lista-notas-aluno" class="list"></div>
                 </div>
             </div>
         </main>

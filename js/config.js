@@ -22,7 +22,7 @@ const CONFIG = {
         valorMaximo: 10,
         casasDecimais: 1,
         aprovacao: {
-            mediaMinima: 7.0,
+            mediaMinima: 6.0, 
             frequenciaMinima: 75.0
         }
     },
@@ -197,11 +197,6 @@ function importarConfiguracao(configJson) {
 
 // Configurações específicas por módulo
 const CONFIG_MODULOS = {
-    dashboard: {
-        atualizacaoAutomatica: true,
-        intervaloAtualizacao: 30000, // 30 segundos
-        mostrarEstatisticas: true
-    },
     alunos: {
         validacaoCPF: true,
         validacaoMatricula: true,
