@@ -39,8 +39,7 @@
         <header class="header">
             <h1>Sistema de Gestão Acadêmica</h1>
             <nav class="nav" id="main-nav">
-                <!-- Botões serão adicionados dinamicamente conforme o perfil -->
-            </nav>
+                </nav>
         </header>
 
         <main class="main-content">
@@ -50,6 +49,10 @@
                     <div class="form-group">
                         <label for="nome-aluno">Nome:</label>
                         <input type="text" id="nome-aluno" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="matricula-aluno">Matrícula:</label>
+                        <input type="text" id="matricula-aluno" required>
                     </div>
                     <div class="form-group">
                         <label for="cpf-aluno">CPF:</label>
@@ -83,6 +86,10 @@
                     <div class="form-group">
                         <label for="nome-professor">Nome:</label>
                         <input type="text" id="nome-professor" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="matricula-professor">Matrícula:</label>
+                        <input type="text" id="matricula-professor" required>
                     </div>
                     <div class="form-group">
                         <label for="cpf-professor">CPF:</label>
@@ -175,32 +182,11 @@
                     <h3>Alunos da Turma</h3>
                     <form id="form-notas-turma">
                         <div id="lista-alunos-notas" class="list"></div>
-                        <button type="submit" class="btn btn-primary">Salvar Todas as Notas</button>
+                        <button type="submit" class="btn btn-primary" style="margin-top: 20px;">Salvar Todas as Notas</button>
                     </form>
                 </div>
-                <div class="list-container">
-                    <h3>Consulta de Notas</h3>
-                    <div class="form-group">
-                        <label for="filtro-aluno">Filtrar por Aluno:</label>
-                        <select id="filtro-aluno">
-                            <option value="">Todos os alunos</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filtro-disciplina-nota">Filtrar por Disciplina:</label>
-                        <select id="filtro-disciplina-nota">
-                            <option value="">Todas as disciplinas</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filtro-turma-nota">Filtrar por Turma:</label>
-                        <select id="filtro-turma-nota">
-                            <option value="">Todas as turmas</option>
-                        </select>
-                    </div>
-                    <div id="lista-notas" class="list"></div>
+                
                 </div>
-            </div>
 
             <div id="frequencia" class="module">
                 <h2>Controle de Frequência</h2>
