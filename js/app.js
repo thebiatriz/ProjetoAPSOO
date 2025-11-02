@@ -2,29 +2,109 @@
 class App {
     constructor() {
         this.storage = new StorageManager();
-        this.backup = new BackupManager(this.storage);
         this.sistema = new SistemaAcademico();
-        this.moduloAtual = 'dashboard';
+        this.perfilAtual = this.obterPerfilAtual();
+        this.moduloAtual = null;
         this.init();
     }
 
     init() {
         this.carregarDados();
         this.configurarEventos();
-        this.atualizarDashboard();
+        this.configurarNavegacaoPorPerfil();
         this.carregarSelects();
-        this.mostrarModulo('dashboard');
+        this.mostrarPrimeiroModuloPermitido();
+    }
+
+    obterPerfilAtual() {
+        const perfil = localStorage.getItem('perfil_usuario') || sessionStorage.getItem('perfil_usuario');
+        return perfil || null;
+    }
+
+    configurarNavegacaoPorPerfil() {
+        const nav = document.getElementById('main-nav');
+        if (!nav) return;
+        
+        nav.innerHTML = '';
+        const perfil = this.perfilAtual;
+        
+        if (perfil === 'admin') {
+            // Admin: Apenas telas de cadastro
+            this.criarBotaoNav(nav, 'alunos', 'Alunos');
+            this.criarBotaoNav(nav, 'professores', 'Professores');
+            this.criarBotaoNav(nav, 'turmas', 'Turmas');
+            this.criarBotaoNav(nav, 'disciplinas', 'Disciplinas');
+        } else if (perfil === 'professor') {
+            // Professor: Apenas telas de gerenciamento acadêmico
+            this.criarBotaoNav(nav, 'notas', 'Notas');
+            this.criarBotaoNav(nav, 'frequencia', 'Frequência');
+            this.criarBotaoNav(nav, 'relatorios', 'Relatórios');
+        } else if (perfil === 'aluno') {
+            // Aluno: Apenas consulta de notas
+            this.criarBotaoNav(nav, 'consulta-notas-aluno', 'Minhas Notas');
+        }
+        
+        // Botão de logout para todos
+        const logoutBtn = document.createElement("button");
+        logoutBtn.textContent = "Sair";
+        logoutBtn.className = "btn btn-secondary";
+        logoutBtn.style.marginLeft = "16px";
+        logoutBtn.type = "button";
+        logoutBtn.onclick = () => {
+            this.logout();
+        };
+        nav.appendChild(logoutBtn);
+    }
+
+    criarBotaoNav(nav, modulo, texto) {
+        const btn = document.createElement('button');
+        btn.className = 'nav-btn';
+        btn.textContent = texto;
+        btn.dataset.module = modulo;
+        btn.addEventListener('click', () => {
+            this.mostrarModulo(modulo);
+        });
+        nav.appendChild(btn);
+    }
+
+    mostrarPrimeiroModuloPermitido() {
+        const perfil = this.perfilAtual;
+        let primeiroModulo = null;
+        
+        if (perfil === 'admin') {
+            primeiroModulo = 'alunos';
+        } else if (perfil === 'professor') {
+            primeiroModulo = 'notas';
+        } else if (perfil === 'aluno') {
+            primeiroModulo = 'consulta-notas-aluno';
+        }
+        
+        if (primeiroModulo) {
+            this.mostrarModulo(primeiroModulo);
+        }
+    }
+
+    logout() {
+        localStorage.removeItem('perfil_usuario');
+        localStorage.removeItem('usuario_atual');
+        sessionStorage.removeItem('perfil_usuario');
+        sessionStorage.removeItem('usuario_atual');
+        sessionStorage.removeItem('sessao_admin_logada');
+        localStorage.removeItem('sessao_admin_logada');
+        window.location.reload();
     }
 
     // Carregar dados do storage para o sistema
     carregarDados() {
         const dados = this.storage.carregarDados();
         
-        // Carregar alunos - recriar instâncias da classe Aluno
+        // Carregar alunos - recriar instâncias da classe Aluno (sem matrícula)
         this.sistema.alunos = (dados.alunos || []).map(alunoData => {
+            // Manter compatibilidade com dados antigos que podem ter matrícula
+            const matricula = alunoData.matricula || '';
             const aluno = new Aluno(
                 alunoData.nome,
-                alunoData.matricula,
+                matricula,
                 alunoData.cpf,
                 alunoData.dataNascimento,
                 alunoData.contato,
@@ -37,11 +117,13 @@ class App {
             return aluno;
         });
         
-        // Carregar professores - recriar instâncias da classe Professor
+        // Carregar professores - recriar instâncias da classe Professor (sem matrícula)
         this.sistema.professores = (dados.professores || []).map(professorData => {
+            // Manter compatibilidade com dados antigos que podem ter matrícula
+            const matricula = professorData.matricula || '';
             const professor = new Professor(
                 professorData.nome,
-                professorData.matricula,
+                matricula,
                 professorData.cpf,
                 professorData.areaAtuacao,
                 professorData.contato,
@@ -66,12 +148,14 @@ class App {
             return turma;
         });
         
-        // Carregar disciplinas - recriar instâncias da classe Disciplina
+        // Carregar disciplinas - recriar instâncias da classe Disciplina (sem carga horária)
         this.sistema.disciplinas = (dados.disciplinas || []).map(disciplinaData => {
+            // Manter compatibilidade com dados antigos que podem ter carga horária
+            const cargaHoraria = disciplinaData.cargaHoraria || 0;
             const disciplina = new Disciplina(
                 disciplinaData.nome,
                 disciplinaData.codigo,
-                disciplinaData.cargaHoraria,
+                cargaHoraria,
                 disciplinaData.descricao || ''
             );
             disciplina.id = disciplinaData.id;
@@ -110,11 +194,22 @@ class App {
             this.cadastrarTurma();
         });
 
-        // Formulário de lançamento de notas
-        document.getElementById('form-nota').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.lancarNota();
-        });
+        // Botão para carregar alunos da turma
+        const btnCarregarAlunos = document.getElementById('btn-carregar-alunos');
+        if (btnCarregarAlunos) {
+            btnCarregarAlunos.addEventListener('click', () => {
+                this.carregarAlunosParaLancamento();
+            });
+        }
+
+        // Formulário de lançamento de notas em lote
+        const formNotasTurma = document.getElementById('form-notas-turma');
+        if (formNotasTurma) {
+            formNotasTurma.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.salvarNotasTurma();
+            });
+        }
 
         // Formulário de frequência
         document.getElementById('form-frequencia').addEventListener('submit', (e) => {
@@ -151,23 +246,6 @@ class App {
         } else {
             console.error('Botão gerar relatório não encontrado!');
         }
-
-        // Funcionalidades de backup
-        document.getElementById('download-backup').addEventListener('click', () => {
-            this.downloadBackup();
-        });
-
-        document.getElementById('upload-backup-btn').addEventListener('click', () => {
-            document.getElementById('upload-backup').click();
-        });
-
-        document.getElementById('upload-backup').addEventListener('change', (e) => {
-            this.uploadBackup(e.target.files[0]);
-        });
-
-        document.getElementById('limpar-dados').addEventListener('click', () => {
-            this.limparDados();
-        });
     }
 
     // Mostrar módulo específico
@@ -183,16 +261,21 @@ class App {
         });
 
         // Mostrar módulo selecionado
-        document.getElementById(modulo).classList.add('active');
-        document.querySelector(`[data-module="${modulo}"]`).classList.add('active');
+        const moduloEl = document.getElementById(modulo);
+        if (moduloEl) {
+            moduloEl.classList.add('active');
+        }
+        
+        // Ativar botão correspondente
+        const btnModulo = document.querySelector(`[data-module="${modulo}"]`);
+        if (btnModulo) {
+            btnModulo.classList.add('active');
+        }
 
         this.moduloAtual = modulo;
 
         // Atualizar conteúdo específico do módulo
         switch (modulo) {
-            case 'dashboard':
-                this.atualizarDashboard();
-                break;
             case 'alunos':
                 this.atualizarListaAlunos();
                 break;
@@ -206,6 +289,8 @@ class App {
                 this.carregarSelectProfessores();
                 break;
             case 'notas':
+                this.carregarSelectTurmas();
+                this.carregarSelectDisciplinas();
                 this.atualizarListaNotas();
                 break;
             case 'frequencia':
@@ -225,19 +310,104 @@ class App {
             case 'disciplinas':
                 this.atualizarListaDisciplinas();
                 break;
+            case 'consulta-notas-aluno':
+                this.carregarNotasAluno();
+                break;
         }
     }
 
-    // Atualizar dashboard
-    atualizarDashboard() {
-        const stats = this.storage.obterEstatisticas();
-        document.getElementById('total-alunos').textContent = stats.totalAlunos;
-        document.getElementById('total-professores').textContent = stats.totalProfessores;
-        document.getElementById('total-turmas').textContent = stats.totalTurmas;
-        document.getElementById('total-disciplinas').textContent = stats.totalDisciplinas;
+    // Carregar alunos para lançamento de notas
+    carregarAlunosParaLancamento() {
+        const turmaId = document.getElementById('turma-nota').value;
+        const disciplinaId = document.getElementById('disciplina-nota').value;
         
-        // Debug: verificar se os dados estão sendo carregados
-        console.log('Dashboard atualizado:', stats);
+        if (!turmaId || !disciplinaId) {
+            alert('Selecione a turma e a disciplina!');
+            return;
+        }
+        
+        const alunos = this.storage.obterAlunos().filter(a => a.turmaId === turmaId);
+        const container = document.getElementById('lista-alunos-notas');
+        const containerLancamento = document.getElementById('container-lancamento-notas');
+        
+        if (!container || !containerLancamento) return;
+        
+        container.innerHTML = '';
+        containerLancamento.style.display = 'block';
+        
+        alunos.forEach(aluno => {
+            const alunoDiv = document.createElement('div');
+            alunoDiv.className = 'list-item';
+            alunoDiv.innerHTML = `
+                <h4>${aluno.nome} - CPF: ${aluno.cpf}</h4>
+                <div class="form-group">
+                    <label>Nome da Avaliação:</label>
+                    <input type="text" class="nome-avaliacao" data-aluno-id="${aluno.id}" required>
+                </div>
+                <div class="form-group">
+                    <label>Peso:</label>
+                    <input type="number" class="peso-avaliacao" data-aluno-id="${aluno.id}" min="0" max="1" step="0.1" required>
+                </div>
+                <div class="form-group">
+                    <label>Nota:</label>
+                    <input type="number" class="nota-avaliacao" data-aluno-id="${aluno.id}" min="0" max="10" step="0.1" required>
+                </div>
+            `;
+            container.appendChild(alunoDiv);
+        });
+    }
+
+    // Salvar notas da turma
+    salvarNotasTurma() {
+        const turmaId = document.getElementById('turma-nota').value;
+        const disciplinaId = document.getElementById('disciplina-nota').value;
+        const container = document.getElementById('lista-alunos-notas');
+        
+        if (!container) return;
+        
+        const inputs = container.querySelectorAll('.nome-avaliacao');
+        let notasSalvas = 0;
+        
+        inputs.forEach(input => {
+            const alunoId = input.dataset.alunoId;
+            const nomeAvaliacao = input.value.trim();
+            const pesoInput = container.querySelector(`.peso-avaliacao[data-aluno-id="${alunoId}"]`);
+            const notaInput = container.querySelector(`.nota-avaliacao[data-aluno-id="${alunoId}"]`);
+            
+            if (!nomeAvaliacao || !pesoInput || !notaInput) return;
+            
+            const peso = parseFloat(pesoInput.value);
+            const nota = parseFloat(notaInput.value);
+            
+            if (isNaN(peso) || isNaN(nota)) return;
+            
+            const notaObj = {
+                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                disciplinaId,
+                tipoAvaliacao: nomeAvaliacao,
+                peso: peso,
+                nota: nota,
+                data: new Date().toISOString().split('T')[0]
+            };
+            
+            const aluno = this.storage.obterAluno(alunoId);
+            if (aluno) {
+                if (!aluno.notas) {
+                    aluno.notas = [];
+                }
+                aluno.notas.push(notaObj);
+                this.storage.adicionarNota(alunoId, notaObj);
+                notasSalvas++;
+            }
+        });
+        
+        if (notasSalvas > 0) {
+            alert(`${notasSalvas} nota(s) lançada(s) com sucesso!`);
+            document.getElementById('container-lancamento-notas').style.display = 'none';
+            this.atualizarListaNotas();
+        } else {
+            alert('Nenhuma nota foi salva. Verifique os dados preenchidos.');
+        }
     }
 
     // Carregar selects com dados
@@ -326,7 +496,7 @@ class App {
     }
 
     carregarSelectTurmas() {
-        const selects = ['turma-aluno', 'filtro-turma', 'filtro-turma-nota'];
+        const selects = ['turma-aluno', 'filtro-turma', 'filtro-turma-nota', 'turma-nota'];
         const turmas = this.sistema.turmas;
         
         selects.forEach(selectId => {
@@ -343,46 +513,43 @@ class App {
         });
     }
 
-    // Cadastrar aluno
+    // Cadastrar aluno (sem matrícula, CPF como identificador único)
     cadastrarAluno() {
         const nome = document.getElementById('nome-aluno').value;
-        const matricula = document.getElementById('matricula-aluno').value;
         const cpf = document.getElementById('cpf-aluno').value;
         const nascimento = document.getElementById('nascimento-aluno').value;
         const contato = document.getElementById('contato-aluno').value;
         const turmaId = document.getElementById('turma-aluno').value;
 
         // Validar CPF
-        const pessoa = new Pessoa(nome, matricula, cpf, contato);
+        const pessoa = new Pessoa(nome, '', cpf, contato); // Matrícula vazia
         if (!pessoa.validarCPF(cpf)) {
             alert('CPF inválido!');
             return;
         }
 
-        // Verificar se matrícula já existe
-        const alunoExistente = this.storage.obterAlunos().find(a => a.matricula === matricula);
+        // Verificar se CPF já existe
+        const alunoExistente = this.storage.obterAlunos().find(a => a.cpf === cpf);
         if (alunoExistente) {
-            alert('Matrícula já cadastrada!');
+            alert('CPF já cadastrado!');
             return;
         }
 
-        const aluno = new Aluno(nome, matricula, cpf, nascimento, contato, turmaId);
+        const aluno = new Aluno(nome, '', cpf, nascimento, contato, turmaId); // Sem matrícula
         
         if (this.storage.adicionarAluno(aluno)) {
             alert('Aluno cadastrado com sucesso!');
             document.getElementById('form-aluno').reset();
             this.atualizarListaAlunos();
-            this.atualizarDashboard();
             this.carregarSelectAlunos();
         } else {
             alert('Erro ao cadastrar aluno!');
         }
     }
 
-    // Cadastrar professor
+    // Cadastrar professor (sem matrícula, CPF como identificador único)
     cadastrarProfessor() {
         const nome = document.getElementById('nome-professor').value;
-        const matricula = document.getElementById('matricula-professor').value;
         const cpf = document.getElementById('cpf-professor').value;
         const area = document.getElementById('area-professor').value;
         const contato = document.getElementById('contato-professor').value;
@@ -391,26 +558,25 @@ class App {
             .filter(value => value);
 
         // Validar CPF
-        const pessoa = new Pessoa(nome, matricula, cpf, contato);
+        const pessoa = new Pessoa(nome, '', cpf, contato); // Matrícula vazia
         if (!pessoa.validarCPF(cpf)) {
             alert('CPF inválido!');
             return;
         }
 
-        // Verificar se matrícula já existe
-        const professorExistente = this.storage.obterProfessores().find(p => p.matricula === matricula);
+        // Verificar se CPF já existe
+        const professorExistente = this.storage.obterProfessores().find(p => p.cpf === cpf);
         if (professorExistente) {
-            alert('Matrícula já cadastrada!');
+            alert('CPF já cadastrado!');
             return;
         }
 
-        const professor = new Professor(nome, matricula, cpf, area, contato, disciplinas);
+        const professor = new Professor(nome, '', cpf, area, contato, disciplinas); // Sem matrícula
         
         if (this.storage.adicionarProfessor(professor)) {
             alert('Professor cadastrado com sucesso!');
             document.getElementById('form-professor').reset();
             this.atualizarListaProfessores();
-            this.atualizarDashboard();
             this.carregarSelectProfessores(); // Atualizar selects de professores
         } else {
             alert('Erro ao cadastrar professor!');
@@ -454,45 +620,12 @@ class App {
             alert('Turma cadastrada com sucesso!');
             document.getElementById('form-turma').reset();
             this.atualizarListaTurmas();
-            this.atualizarDashboard();
             this.carregarSelectTurmas();
         } else {
             alert('Erro ao cadastrar turma!');
         }
     }
 
-    // Lançar nota
-    lancarNota() {
-        const alunoId = document.getElementById('aluno-nota').value;
-        const disciplinaId = document.getElementById('disciplina-nota').value;
-        const tipoAvaliacao = document.getElementById('tipo-avaliacao').value;
-        const nota = parseFloat(document.getElementById('nota-valor').value);
-
-        const notaObj = {
-            id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-            disciplinaId,
-            tipoAvaliacao,
-            nota,
-            data: new Date().toISOString().split('T')[0]
-        };
-
-        // Adicionar nota ao aluno também
-        const aluno = this.storage.obterAluno(alunoId);
-        if (aluno) {
-            if (!aluno.notas) {
-                aluno.notas = [];
-            }
-            aluno.notas.push(notaObj);
-        }
-
-        if (this.storage.adicionarNota(alunoId, notaObj)) {
-            alert('Nota lançada com sucesso!');
-            document.getElementById('form-nota').reset();
-            this.atualizarListaNotas();
-        } else {
-            alert('Erro ao lançar nota!');
-        }
-    }
 
     // Registrar frequência
     registrarFrequencia() {
@@ -542,15 +675,10 @@ class App {
             alunoDiv.className = 'list-item';
             alunoDiv.innerHTML = `
                 <h4>${aluno.nome}</h4>
-                <p><strong>Matrícula:</strong> ${aluno.matricula}</p>
                 <p><strong>CPF:</strong> ${aluno.cpf}</p>
                 <p><strong>Data de Nascimento:</strong> ${aluno.dataNascimento}</p>
                 <p><strong>Contato:</strong> ${aluno.contato}</p>
                 <p><strong>Turma:</strong> ${turmaNome}</p>
-                <div class="actions">
-                    <button class="btn btn-secondary" onclick="app.editarAluno('${aluno.id}')">Editar</button>
-                    <button class="btn btn-danger" onclick="app.removerAluno('${aluno.id}')">Remover</button>
-                </div>
             `;
             container.appendChild(alunoDiv);
         });
@@ -573,15 +701,10 @@ class App {
             professorDiv.className = 'list-item';
             professorDiv.innerHTML = `
                 <h4>${professor.nome}</h4>
-                <p><strong>Matrícula:</strong> ${professor.matricula}</p>
                 <p><strong>CPF:</strong> ${professor.cpf}</p>
                 <p><strong>Área de Atuação:</strong> ${professor.areaAtuacao}</p>
                 <p><strong>Contato:</strong> ${professor.contato}</p>
                 <p><strong>Disciplinas:</strong> ${disciplinas || 'Nenhuma disciplina'}</p>
-                <div class="actions">
-                    <button class="btn btn-secondary" onclick="app.editarProfessor('${professor.id}')">Editar</button>
-                    <button class="btn btn-danger" onclick="app.removerProfessor('${professor.id}')">Remover</button>
-                </div>
             `;
             container.appendChild(professorDiv);
         });
@@ -608,10 +731,6 @@ class App {
                 <p><strong>Ano:</strong> ${turma.ano}</p>
                 <p><strong>Semestre:</strong> ${turma.semestre}</p>
                 <p><strong>Total de Alunos:</strong> ${turma.alunos ? turma.alunos.length : 0}</p>
-                <div class="actions">
-                    <button class="btn btn-secondary" onclick="app.editarTurma('${turma.id}')">Editar</button>
-                    <button class="btn btn-danger" onclick="app.removerTurma('${turma.id}')">Remover</button>
-                </div>
             `;
             container.appendChild(turmaDiv);
         });
@@ -633,10 +752,12 @@ class App {
                     
                     const notaDiv = document.createElement('div');
                     notaDiv.className = 'list-item';
+                    const peso = nota.peso ? nota.peso : '';
                     notaDiv.innerHTML = `
                         <h4>${aluno.nome}</h4>
                         <p><strong>Disciplina:</strong> ${disciplinaNome}</p>
                         <p><strong>Tipo:</strong> ${nota.tipoAvaliacao}</p>
+                        ${peso ? `<p><strong>Peso:</strong> ${peso}</p>` : ''}
                         <p><strong>Nota:</strong> ${nota.nota}</p>
                         <p><strong>Data:</strong> ${nota.data}</p>
                     `;
@@ -722,6 +843,7 @@ class App {
                         <p><strong>Disciplina:</strong> ${disciplinaNome}</p>
                         <p><strong>Turma:</strong> ${turmaNome}</p>
                         <p><strong>Tipo:</strong> ${nota.tipoAvaliacao}</p>
+                        ${nota.peso ? `<p><strong>Peso:</strong> ${nota.peso}</p>` : ''}
                         <p><strong>Nota:</strong> ${nota.nota}</p>
                         <p><strong>Data:</strong> ${nota.data}</p>
                         <p><strong>Média da Disciplina:</strong> ${mediaDisciplina}</p>
@@ -902,119 +1024,11 @@ class App {
         });
     }
 
-    // Métodos de edição e remoção (simplificados)
-    editarAluno(id) {
-        alert('Funcionalidade de edição será implementada em versão futura');
-    }
 
-    removerAluno(id) {
-        if (confirm('Tem certeza que deseja remover este aluno?')) {
-            if (this.storage.removerAluno(id)) {
-                alert('Aluno removido com sucesso!');
-                this.atualizarListaAlunos();
-                this.atualizarDashboard();
-            } else {
-                alert('Erro ao remover aluno!');
-            }
-        }
-    }
-
-    editarProfessor(id) {
-        alert('Funcionalidade de edição será implementada em versão futura');
-    }
-
-    removerProfessor(id) {
-        if (confirm('Tem certeza que deseja remover este professor?')) {
-            if (this.storage.removerProfessor(id)) {
-                alert('Professor removido com sucesso!');
-                this.atualizarListaProfessores();
-                this.atualizarDashboard();
-            } else {
-                alert('Erro ao remover professor!');
-            }
-        }
-    }
-
-    editarTurma(id) {
-        alert('Funcionalidade de edição será implementada em versão futura');
-    }
-
-    removerTurma(id) {
-        if (confirm('Tem certeza que deseja remover esta turma?')) {
-            if (this.storage.removerTurma(id)) {
-                alert('Turma removida com sucesso!');
-                this.atualizarListaTurmas();
-                this.atualizarDashboard();
-            } else {
-                alert('Erro ao remover turma!');
-            }
-        }
-    }
-
-    // Métodos de backup
-    downloadBackup() {
-        try {
-            this.backup.downloadBackup();
-            this.mostrarStatusBackup('Backup gerado e baixado com sucesso!', 'success');
-        } catch (error) {
-            this.mostrarStatusBackup('Erro ao gerar backup: ' + error.message, 'error');
-        }
-    }
-
-    async uploadBackup(file) {
-        if (!file) return;
-
-        try {
-            const resultado = await this.backup.uploadBackup(file);
-            this.mostrarStatusBackup(resultado, 'success');
-            
-            // Recarregar dados e atualizar interface
-            this.carregarDados();
-            this.atualizarDashboard();
-            this.carregarSelects();
-            
-            // Atualizar módulo atual se necessário
-            if (this.moduloAtual === 'alunos') this.atualizarListaAlunos();
-            if (this.moduloAtual === 'professores') this.atualizarListaProfessores();
-            if (this.moduloAtual === 'turmas') this.atualizarListaTurmas();
-            if (this.moduloAtual === 'notas') this.atualizarListaNotas();
-            if (this.moduloAtual === 'frequencia') this.atualizarListaFrequencia();
-            
-        } catch (error) {
-            this.mostrarStatusBackup('Erro ao restaurar backup: ' + error, 'error');
-        }
-    }
-
-    limparDados() {
-        if (confirm('Tem certeza que deseja limpar TODOS os dados? Esta ação não pode ser desfeita!')) {
-            if (this.storage.limparDados()) {
-                this.mostrarStatusBackup('Todos os dados foram removidos!', 'warning');
-                this.carregarDados();
-                this.atualizarDashboard();
-                this.carregarSelects();
-            } else {
-                this.mostrarStatusBackup('Erro ao limpar dados!', 'error');
-            }
-        }
-    }
-
-    mostrarStatusBackup(mensagem, tipo) {
-        const statusDiv = document.getElementById('backup-status');
-        statusDiv.textContent = mensagem;
-        statusDiv.className = `backup-status ${tipo}`;
-        
-        // Limpar status após 5 segundos
-        setTimeout(() => {
-            statusDiv.textContent = '';
-            statusDiv.className = 'backup-status';
-        }, 5000);
-    }
-
-    // Cadastrar disciplina
+    // Cadastrar disciplina (sem carga horária)
     cadastrarDisciplina() {
         const nome = document.getElementById('nome-disciplina').value;
         const codigo = document.getElementById('codigo-disciplina').value;
-        const carga = parseInt(document.getElementById('carga-disciplina').value);
 
         // Verificar se código já existe
         const disciplinaExistente = this.storage.obterDisciplinas().find(d => d.codigo === codigo);
@@ -1023,13 +1037,12 @@ class App {
             return;
         }
 
-        const disciplina = new Disciplina(nome, codigo, carga);
+        const disciplina = new Disciplina(nome, codigo, 0); // Sem carga horária
         
         if (this.storage.adicionarDisciplina(disciplina)) {
             alert('Disciplina cadastrada com sucesso!');
             document.getElementById('form-disciplina').reset();
             this.atualizarListaDisciplinas();
-            this.atualizarDashboard();
             this.carregarSelectDisciplinas();
             
             // Atualizar também os selects de professores
@@ -1052,66 +1065,136 @@ class App {
             disciplinaDiv.innerHTML = `
                 <h4>${disciplina.nome}</h4>
                 <p><strong>Código:</strong> ${disciplina.codigo}</p>
-                <p><strong>Carga Horária:</strong> ${disciplina.cargaHoraria} horas</p>
-                <div class="actions">
-                    <button class="btn btn-secondary" onclick="app.editarDisciplina('${disciplina.id}')">Editar</button>
-                    <button class="btn btn-danger" onclick="app.removerDisciplina('${disciplina.id}')">Remover</button>
-                </div>
             `;
             container.appendChild(disciplinaDiv);
         });
     }
 
-    // Métodos de edição e remoção para disciplinas
-    editarDisciplina(id) {
-        alert('Funcionalidade de edição será implementada em versão futura');
+    // Carregar notas do aluno logado
+    carregarNotasAluno() {
+        const alunoAtual = this.obterAlunoAtual();
+        if (!alunoAtual) {
+            const container = document.getElementById('lista-notas-aluno');
+            if (container) {
+                container.innerHTML = '<div class="list-item"><p>Nenhum aluno encontrado para exibir notas.</p></div>';
+            }
+            return;
+        }
+        
+        const aluno = this.storage.obterAluno(alunoAtual.id);
+        if (!aluno || !aluno.notas || aluno.notas.length === 0) {
+            const container = document.getElementById('lista-notas-aluno');
+            if (container) {
+                container.innerHTML = '<div class="list-item"><p>Nenhuma nota encontrada.</p></div>';
+            }
+            return;
+        }
+        
+        const container = document.getElementById('lista-notas-aluno');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        const disciplinas = this.storage.obterDisciplinas();
+        
+        // Agrupar notas por disciplina
+        const notasPorDisciplina = {};
+        aluno.notas.forEach(nota => {
+            if (!notasPorDisciplina[nota.disciplinaId]) {
+                notasPorDisciplina[nota.disciplinaId] = [];
+            }
+            notasPorDisciplina[nota.disciplinaId].push(nota);
+        });
+        
+        Object.keys(notasPorDisciplina).forEach(disciplinaId => {
+            const disciplina = disciplinas.find(d => d.id === disciplinaId);
+            const disciplinaNome = disciplina ? disciplina.nome : 'Disciplina não encontrada';
+            const notas = notasPorDisciplina[disciplinaId];
+            
+            const disciplinaDiv = document.createElement('div');
+            disciplinaDiv.className = 'list-item';
+            
+            let notasHtml = '<ul>';
+            notas.forEach(nota => {
+                notasHtml += `<li>
+                    <strong>${nota.tipoAvaliacao}</strong>
+                    ${nota.peso ? ` (Peso: ${nota.peso})` : ''}
+                    - Nota: ${nota.nota} - Data: ${nota.data}
+                </li>`;
+            });
+            notasHtml += '</ul>';
+            
+            const media = parseFloat(aluno.calcularMediaDisciplina(disciplinaId));
+            const frequencia = parseFloat(aluno.calcularFrequenciaDisciplina(disciplinaId));
+            const aprovado = media >= 6 && frequencia >= 75;
+            
+            disciplinaDiv.innerHTML = `
+                <h4>${disciplinaNome}</h4>
+                ${notasHtml}
+                <p><strong>Média:</strong> ${media}</p>
+                <p><strong>Frequência:</strong> ${frequencia}%</p>
+                <p><strong>Status:</strong> ${aprovado ? 'Aprovado' : 'Reprovado'}</p>
+            `;
+            container.appendChild(disciplinaDiv);
+        });
     }
 
-    removerDisciplina(id) {
-        if (confirm('Tem certeza que deseja remover esta disciplina?')) {
-            if (this.storage.removerDisciplina(id)) {
-                alert('Disciplina removida com sucesso!');
-                this.atualizarListaDisciplinas();
-                this.atualizarDashboard();
-                this.carregarSelectDisciplinas();
-            } else {
-                alert('Erro ao remover disciplina!');
+    obterAlunoAtual() {
+        const cpfAtual = localStorage.getItem('usuario_atual') || sessionStorage.getItem('usuario_atual');
+        if (!cpfAtual) return null;
+        
+        const alunos = this.storage.obterAlunos();
+        return alunos.find(a => a.cpf === cpfAtual) || null;
+    }
+}
+
+// Sistema de Login com 3 Perfis
+function estaAutenticado() {
+    const perfil = localStorage.getItem('perfil_usuario') || sessionStorage.getItem('perfil_usuario');
+    return perfil !== null;
+}
+
+function autenticarUsuario(tipo, usuario, senha, lembrar) {
+    // Administrador
+    if (tipo === 'admin' && usuario === 'admin' && senha === '1234') {
+        salvarSessao('admin', usuario, lembrar);
+        return true;
+    }
+    
+    // Professor ou Aluno - autenticar por CPF
+    if (tipo === 'professor' || tipo === 'aluno') {
+        const storage = new StorageManager();
+        if (tipo === 'professor') {
+            const professores = storage.obterProfessores();
+            const professor = professores.find(p => p.cpf === usuario && senha === '1234'); // Senha padrão: 1234
+            if (professor) {
+                salvarSessao('professor', professor.cpf, lembrar);
+                return true;
+            }
+        } else if (tipo === 'aluno') {
+            const alunos = storage.obterAlunos();
+            const aluno = alunos.find(a => a.cpf === usuario && senha === '1234'); // Senha padrão: 1234
+            if (aluno) {
+                salvarSessao('aluno', aluno.cpf, lembrar);
+                return true;
             }
         }
     }
-}
-
-// LOGIN DE ADMIN (Refatorado para garantir fluxo correto)
-const LOGIN_USER = "admin";
-const LOGIN_PASS = "1234";
-const LOGIN_LS_KEY = "sessao_admin_logada";
-
-function estaAutenticado() {
-    return (
-        localStorage.getItem(LOGIN_LS_KEY) === "1" ||
-        sessionStorage.getItem(LOGIN_LS_KEY) === "1"
-    );
-}
-
-function autenticarAdmin(user, pass, lembrar) {
-    if (user === LOGIN_USER && pass === LOGIN_PASS) {
-        if (lembrar) {
-            localStorage.setItem(LOGIN_LS_KEY, "1");
-            sessionStorage.removeItem(LOGIN_LS_KEY);
-        } else {
-            sessionStorage.setItem(LOGIN_LS_KEY, "1");
-            localStorage.removeItem(LOGIN_LS_KEY);
-        }
-        return true;
-    }
+    
     return false;
 }
 
-function logoutAdmin() {
-    localStorage.removeItem(LOGIN_LS_KEY);
-    sessionStorage.removeItem(LOGIN_LS_KEY);
-    aplicarEstadoAutenticacao(false);
-    destruirApp();
+function salvarSessao(perfil, usuario, lembrar) {
+    if (lembrar) {
+        localStorage.setItem('perfil_usuario', perfil);
+        localStorage.setItem('usuario_atual', usuario);
+        sessionStorage.removeItem('perfil_usuario');
+        sessionStorage.removeItem('usuario_atual');
+    } else {
+        sessionStorage.setItem('perfil_usuario', perfil);
+        sessionStorage.setItem('usuario_atual', usuario);
+        localStorage.removeItem('perfil_usuario');
+        localStorage.removeItem('usuario_atual');
+    }
 }
 
 function aplicarEstadoAutenticacao(autenticado) {
@@ -1141,6 +1224,7 @@ function destruirApp() {
 
 window.addEventListener("DOMContentLoaded", function() {
     const loginForm = document.getElementById("login-form");
+    const inputTipo = document.getElementById("login-tipo");
     const inputUser = document.getElementById("login-usuario");
     const inputPass = document.getElementById("login-senha");
     const inputLembrar = document.getElementById("lembrar-login");
@@ -1153,6 +1237,7 @@ window.addEventListener("DOMContentLoaded", function() {
         if (erroArea) { erroArea.textContent = ""; erroArea.style.display = "none"; }
         if (inputPass) inputPass.value = "";
         if (inputUser) inputUser.value = "";
+        if (inputTipo) inputTipo.value = "";
     }
 
     // Função para prosseguir ao sistema
@@ -1160,8 +1245,6 @@ window.addEventListener("DOMContentLoaded", function() {
         aplicarEstadoAutenticacao(true);
         setTimeout(() => {
             inicializarApp();
-            // Foco no dashboard, corrige navegação
-            window.location.hash = "";
         }, 90);
     }
 
@@ -1177,44 +1260,26 @@ window.addEventListener("DOMContentLoaded", function() {
         loginForm.addEventListener("submit", function(e) {
             e.preventDefault();
 
+            const tipo = inputTipo ? inputTipo.value : '';
             const user = inputUser.value.trim();
             const pass = inputPass.value;
-            const lembrar = inputLembrar.checked;
-            if (autenticarAdmin(user, pass, lembrar)) {
+            const lembrar = inputLembrar ? inputLembrar.checked : false;
+            
+            if (!tipo) {
+                erroArea.textContent = "Selecione o tipo de usuário!";
+                erroArea.style.display = "block";
+                return;
+            }
+            
+            if (autenticarUsuario(tipo, user, pass, lembrar)) {
                 erroArea.textContent = "";
                 erroArea.style.display = "none";
                 entrarSistema();
             } else {
-                erroArea.textContent = "Usuário ou senha inválidos!";
+                erroArea.textContent = "Usuário/CPF ou senha inválidos!";
                 erroArea.style.display = "block";
                 if (inputPass) inputPass.value = "";
             }
         });
     }
-
-    // Botão de logout no menu sempre que app for inicializado
-    function adicionarBotaoLogout() {
-        if (document.getElementById("btn-logout-adm")) return;
-        const logoutBtn = document.createElement("button");
-        logoutBtn.textContent = "Sair";
-        logoutBtn.className = "btn btn-secondary";
-        logoutBtn.style.marginLeft = "16px";
-        logoutBtn.type = "button";
-        logoutBtn.id = "btn-logout-adm";
-        logoutBtn.onclick = () => {
-            logoutAdmin();
-            mostrarLogin();
-        };
-        // Adiciona botão de logout ao final do menu
-        setTimeout(() => {
-            const headerNav = document.querySelector(".nav");
-            if (headerNav && !document.getElementById("btn-logout-adm")) {
-                headerNav.appendChild(logoutBtn);
-            }
-        }, 300);
-    }
-    // Tenta adicionar o botão a cada inicialização do App
-    setInterval(() => {
-        if (window.app && estaAutenticado()) adicionarBotaoLogout();
-    }, 1200);
 });
