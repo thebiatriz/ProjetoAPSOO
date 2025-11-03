@@ -39,6 +39,7 @@ class App {
             this.criarBotaoNav(nav, 'notas', 'Notas');
             this.criarBotaoNav(nav, 'frequencia', 'Frequência');
             this.criarBotaoNav(nav, 'relatorios', 'Relatórios');
+            this.criarBotaoNav(nav, 'consulta-professor', 'Consultar Aluno'); 
         } else if (perfil === 'aluno') {
             // Aluno: Apenas consulta de notas
             this.criarBotaoNav(nav, 'consulta-notas-aluno', 'Minhas Notas');
@@ -213,6 +214,20 @@ class App {
                 this.gerarRelatorio();
             });
         }
+        
+        const filtroTurmaConsulta = document.getElementById('filtro-turma-consulta-professor');
+        if (filtroTurmaConsulta) {
+            filtroTurmaConsulta.addEventListener('change', () => {
+                this.carregarAlunosParaConsultaProfessor();
+            });
+        }
+        
+        const filtroAlunoConsulta = document.getElementById('filtro-aluno-consulta-professor');
+        if (filtroAlunoConsulta) {
+            filtroAlunoConsulta.addEventListener('change', () => {
+                this.carregarNotasParaProfessor();
+            });
+        }
     }
 
     // Mostrar módulo específico
@@ -257,15 +272,12 @@ class App {
                 this.carregarSelectProfessores();
                 break;
             case 'notas':
-                // O carregamento dos selects de turma/disciplina acontece ao mostrar o módulo
                 this.carregarSelectTurmas();
                 this.carregarSelectDisciplinas();
-                // Limpar lista anterior
                 document.getElementById('lista-alunos-notas').innerHTML = '';
                 document.getElementById('container-lancamento-notas').style.display = 'none';
                 break;
             case 'frequencia':
-                // Atualizar listas
                 this.carregarSelectAlunos();
                 this.carregarSelectDisciplinas();
                 this.atualizarListaFrequencia();
@@ -280,6 +292,9 @@ class App {
             case 'consulta-notas-aluno':
                 this.carregarNotasAluno();
                 break;
+            case 'consulta-professor':
+                this.carregarFiltrosConsultaProfessor();
+                break;
         }
     }
 
@@ -293,7 +308,6 @@ class App {
             return;
         }
         
-        // Usar this.sistema para obter dados
         const alunos = this.sistema.alunos.filter(a => a.turmaId === turmaId);
         const container = document.getElementById('lista-alunos-notas');
         const containerLancamento = document.getElementById('container-lancamento-notas');
@@ -365,10 +379,8 @@ class App {
                 data: new Date().toISOString().split('T')[0]
             };
             
-            // Usar this.sistema.obterAluno para garantir que é a instância da classe
             const aluno = this.sistema.obterAluno(alunoId);
             if (aluno) {
-                // O storage.adicionarNota é o único que deve adicionar e salvar.
                 this.storage.adicionarNota(alunoId, notaObj);
                 // Sincronizar a instância local
                 aluno.adicionarNota(disciplinaId, nomeAvaliacao, peso, nota, notaObj.data);
@@ -437,14 +449,15 @@ class App {
         });
     }
 
-    carregarSelectAlunos() {
-        const selects = ['aluno-frequencia'];
-        const alunos = this.sistema.alunos; // Usar this.sistema
+    carregarSelectAlunos(targetSelectId, alunosData) {
+        const selects = ['aluno-frequencia', 'filtro-aluno-consulta-professor'];
         
         selects.forEach(selectId => {
             const select = document.getElementById(selectId);
             if (select) {
                 const oldValue = select.value;
+                const alunos = alunosData || this.sistema.alunos; // Usa lista filtrada se fornecida
+                
                 select.innerHTML = '<option value="">Selecione um aluno</option>';
                 alunos.forEach(aluno => {
                     const option = document.createElement('option');
@@ -458,7 +471,7 @@ class App {
     }
 
     carregarSelectTurmas() {
-        const selects = ['turma-aluno', 'filtro-turma', 'turma-nota'];
+        const selects = ['turma-aluno', 'filtro-turma', 'turma-nota', 'filtro-turma-consulta-professor'];
         const turmas = this.sistema.turmas; // Usar this.sistema
         
         selects.forEach(selectId => {
@@ -505,7 +518,6 @@ class App {
         const aluno = new Aluno(nome, matricula, cpf, nascimento, contato, turmaId);
         
         if (this.storage.adicionarAluno(aluno)) {
-            // Adicionar ao 'this.sistema' também para consistência imediata
             this.sistema.adicionarAluno(aluno);
             
             alert('Aluno cadastrado com sucesso!');
@@ -548,7 +560,6 @@ class App {
         const professor = new Professor(nome, matricula, cpf, area, contato, disciplinas);
         
         if (this.storage.adicionarProfessor(professor)) {
-            // Adicionar ao 'this.sistema' também
             this.sistema.adicionarProfessor(professor);
             
             alert('Professor cadastrado com sucesso!');
@@ -575,7 +586,6 @@ class App {
             return;
         }
 
-        // Usar 'this.sistema' para verificar
         const professor = this.sistema.obterProfessor(professorId);
         if (!professor) {
             alert('Professor selecionado não encontrado!');
@@ -621,13 +631,11 @@ class App {
             presente
         };
         
-        // Sincronizar instância local
         const aluno = this.sistema.obterAluno(alunoId);
         if(aluno) {
              aluno.adicionarFrequencia(disciplinaId, data, presente);
         }
 
-        // Adicionar frequência ao aluno (storage.js foi atualizado)
         if (this.storage.adicionarFrequenciaAluno(alunoId, frequenciaObj)) {
             alert('Frequência registrada com sucesso!');
             document.getElementById('form-frequencia').reset();
@@ -640,12 +648,12 @@ class App {
     // Atualizar lista de alunos
     atualizarListaAlunos() {
         const container = document.getElementById('lista-alunos');
-        const alunos = this.sistema.alunos; // Usar this.sistema
+        const alunos = this.sistema.alunos;
         
         container.innerHTML = '';
         
         alunos.forEach(aluno => {
-            const turma = this.sistema.obterTurma(aluno.turmaId); // Usar this.sistema
+            const turma = this.sistema.obterTurma(aluno.turmaId);
             const turmaNome = turma ? turma.nome : 'Sem turma';
             
             const alunoDiv = document.createElement('div');
@@ -673,12 +681,11 @@ class App {
         if (!confirm('Tem certeza que deseja remover este aluno?')) return;
 
         if (this.storage.removerAluno(id)) {
-            // Remover de 'this.sistema' também
             this.sistema.alunos = this.sistema.alunos.filter(a => a.id !== id);
             
             alert('Aluno removido com sucesso!');
-            this.atualizarListaAlunos(); // Atualiza a lista
-            this.carregarSelectAlunos(); // Atualiza os dropdowns
+            this.atualizarListaAlunos(); 
+            this.carregarSelectAlunos(); 
         } else {
             alert('Erro ao remover aluno.');
         }
@@ -687,13 +694,13 @@ class App {
     // Atualizar lista de professores
     atualizarListaProfessores() {
         const container = document.getElementById('lista-professores');
-        const professores = this.sistema.professores; // Usar this.sistema
+        const professores = this.sistema.professores;
         
         container.innerHTML = '';
         
         professores.forEach(professor => {
             const disciplinas = professor.disciplinas.map(id => {
-                const disciplina = this.sistema.obterDisciplina(id); // Usar this.sistema
+                const disciplina = this.sistema.obterDisciplina(id);
                 return disciplina ? disciplina.nome : 'N/A';
             }).join(', ');
 
@@ -735,7 +742,7 @@ class App {
     // Atualizar lista de turmas
     atualizarListaTurmas() {
         const container = document.getElementById('lista-turmas');
-        const turmas = this.sistema.turmas; // Usar this.sistema
+        const turmas = this.sistema.turmas;
         
         container.innerHTML = '';
         
@@ -783,8 +790,8 @@ class App {
     // Atualizar lista de frequência
     atualizarListaFrequencia() {
         const container = document.getElementById('lista-frequencia');
-        const alunos = this.sistema.alunos; // Usar this.sistema
-        const disciplinas = this.sistema.disciplinas; // Usar this.sistema
+        const alunos = this.sistema.alunos;
+        const disciplinas = this.sistema.disciplinas;
         
         container.innerHTML = '';
         
@@ -847,7 +854,6 @@ class App {
             return;
         }
         
-        // Usar this.sistema para os dados
         let turmas = this.sistema.turmas;
         let disciplinas = this.sistema.disciplinas;
         let professores = this.sistema.professores;
@@ -1005,7 +1011,6 @@ class App {
 
     // Carregar notas do aluno logado
     carregarNotasAluno() {
-        // 1. Usar a nova 'obterAlunoAtual' que busca em 'this.sistema'
         const aluno = this.obterAlunoAtual(); 
         
         const container = document.getElementById('lista-notas-aluno');
@@ -1016,14 +1021,13 @@ class App {
             return;
         }
         
-        // 2. Usar o objeto 'aluno' (que é uma instância de classe) diretamente
         if (!aluno.notas || aluno.notas.length === 0) {
             container.innerHTML = '<div class="list-item"><p>Nenhuma nota encontrada.</p></div>';
             return;
         }
         
         container.innerHTML = '';
-        const disciplinas = this.sistema.disciplinas; // Usar this.sistema
+        const disciplinas = this.sistema.disciplinas;
         
         // Agrupar notas por disciplina
         const notasPorDisciplina = {};
@@ -1052,7 +1056,6 @@ class App {
             });
             notasHtml += '</ul>';
             
-            // 3. Chamar os métodos da *instância* 'aluno'
             const media = parseFloat(aluno.calcularMediaDisciplina(disciplinaId));
             const frequencia = parseFloat(aluno.calcularFrequenciaDisciplina(disciplinaId));
             const aprovado = aluno.verificarAprovacao(disciplinaId);
@@ -1072,9 +1075,101 @@ class App {
         const cpfAtual = localStorage.getItem('usuario_atual') || sessionStorage.getItem('usuario_atual');
         if (!cpfAtual) return null;
         
-        // Buscar em 'this.sistema.alunos' (instâncias de classe)
-        // e não em 'this.storage.obterAlunos()' (dados brutos)
         return this.sistema.alunos.find(a => a.cpf === cpfAtual) || null;
+    }
+
+    carregarFiltrosConsultaProfessor() {
+        this.carregarSelectTurmas(); 
+        // Limpa o select de alunos
+        const selectAluno = document.getElementById('filtro-aluno-consulta-professor');
+        if (selectAluno) {
+            selectAluno.innerHTML = '<option value="">Selecione uma turma primeiro</option>';
+        }
+        // Limpa a lista de notas
+        const container = document.getElementById('lista-notas-consulta-professor');
+        if (container) {
+            container.innerHTML = '';
+        }
+    }
+    
+    carregarAlunosParaConsultaProfessor() {
+        const turmaId = document.getElementById('filtro-turma-consulta-professor').value;
+        const selectAluno = document.getElementById('filtro-aluno-consulta-professor');
+        if (!selectAluno) return;
+
+        if (!turmaId) {
+            selectAluno.innerHTML = '<option value="">Selecione uma turma primeiro</option>';
+            return;
+        }
+        
+        const alunosDaTurma = this.sistema.alunos.filter(a => a.turmaId === turmaId);
+        this.carregarSelectAlunos('filtro-aluno-consulta-professor', alunosDaTurma);
+    }
+    
+    carregarNotasParaProfessor() {
+        const alunoId = document.getElementById('filtro-aluno-consulta-professor').value;
+        const container = document.getElementById('lista-notas-consulta-professor');
+        if (!container) return;
+        
+        if (!alunoId) {
+            container.innerHTML = ''; // Limpa se nenhum aluno for selecionado
+            return;
+        }
+        
+        const aluno = this.sistema.obterAluno(alunoId);
+        
+        if (!aluno) {
+            container.innerHTML = '<div class="list-item"><p>Aluno não encontrado.</p></div>';
+            return;
+        }
+        
+        if (!aluno.notas || aluno.notas.length === 0) {
+            container.innerHTML = '<div class="list-item"><p>Nenhuma nota encontrada para este aluno.</p></div>';
+            return;
+        }
+        
+        container.innerHTML = '';
+        const disciplinas = this.sistema.disciplinas;
+        
+        const notasPorDisciplina = {};
+        aluno.notas.forEach(nota => {
+            if (!notasPorDisciplina[nota.disciplinaId]) {
+                notasPorDisciplina[nota.disciplinaId] = [];
+            }
+            notasPorDisciplina[nota.disciplinaId].push(nota);
+        });
+        
+        Object.keys(notasPorDisciplina).forEach(disciplinaId => {
+            const disciplina = disciplinas.find(d => d.id === disciplinaId);
+            const disciplinaNome = disciplina ? disciplina.nome : 'N/A';
+            const notas = notasPorDisciplina[disciplinaId];
+            
+            const disciplinaDiv = document.createElement('div');
+            disciplinaDiv.className = 'list-item';
+            
+            let notasHtml = '<ul>';
+            notas.forEach(nota => {
+                notasHtml += `<li>
+                    <strong>${nota.tipoAvaliacao}</strong>
+                    ${nota.peso ? ` (Peso: ${nota.peso})` : ''}
+                    - Nota: ${nota.nota} - Data: ${nota.data}
+                </li>`;
+            });
+            notasHtml += '</ul>';
+            
+            const media = parseFloat(aluno.calcularMediaDisciplina(disciplinaId));
+            const frequencia = parseFloat(aluno.calcularFrequenciaDisciplina(disciplinaId));
+            const aprovado = aluno.verificarAprovacao(disciplinaId);
+            
+            disciplinaDiv.innerHTML = `
+                <h4>${disciplinaNome}</h4>
+                ${notasHtml}
+                <p><strong>Média:</strong> ${media.toFixed(2)}</p>
+                <p><strong>Frequência:</strong> ${frequencia}%</p>
+                <p><strong>Status:</strong> ${aprovado ? 'Aprovado' : 'Reprovado'}</p>
+            `;
+            container.appendChild(disciplinaDiv);
+        });
     }
 }
 
